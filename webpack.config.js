@@ -16,6 +16,7 @@ const {env} = process;
 const PLATFORMS_URL = 'https://docs.sentry.io/_platforms/_index.json';
 const IS_PRODUCTION = env.NODE_ENV === 'production';
 const IS_TEST = env.NODE_ENV === 'test' || env.TEST_SUITE;
+const IS_STORYBOOK = env.STORYBOOK_BUILD === '1';
 const WEBPACK_MODE = IS_PRODUCTION ? 'production' : 'development';
 
 // HMR proxying
@@ -211,29 +212,30 @@ const transformPlatformsToList = function({platforms}) {
     .sort(alphaSortFromKey(item => item.name));
 };
 
-const fetchIntegrationDocsPlatforms = IS_TEST
-  ? function(callback) {
-      fs.readFile(
-        path.join(__dirname, 'tests/fixtures/integration-docs/_platforms.json'),
-        callback
-      );
-    }
-  : function(callback) {
-      const req = https.get(PLATFORMS_URL, res => {
-        let buffer = '';
-        res
-          .on('data', data => (buffer += data))
-          .on('end', () =>
-            callback(
-              null,
-              JSON.stringify({
-                platforms: transformPlatformsToList(JSON.parse(buffer)),
-              })
-            )
-          );
-      });
-      req.on('error', callback);
-    };
+const fetchIntegrationDocsPlatforms =
+  IS_TEST || IS_STORYBOOK
+    ? function(callback) {
+        fs.readFile(
+          path.join(__dirname, 'tests/fixtures/integration-docs/_platforms.json'),
+          callback
+        );
+      }
+    : function(callback) {
+        const req = https.get(PLATFORMS_URL, res => {
+          let buffer = '';
+          res
+            .on('data', data => (buffer += data))
+            .on('end', () =>
+              callback(
+                null,
+                JSON.stringify({
+                  platforms: transformPlatformsToList(JSON.parse(buffer)),
+                })
+              )
+            );
+        });
+        req.on('error', callback);
+      };
 
 /**
  * Explicit codesplitting cache groups
