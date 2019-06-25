@@ -728,7 +728,7 @@ class EventManager(object):
                     extra={
                         'event_uuid': event_id,
                         'project_id': project.id,
-                        'group_id': group.id,
+                        'group_id': group.id if group else None,
                         'model': EventMapping.__name__,
                     }
                 )
@@ -836,7 +836,7 @@ class EventManager(object):
                     extra={
                         'event_uuid': event_id,
                         'project_id': project.id,
-                        'group_id': group.id,
+                        'group_id': group.id if group else None,
                         'model': Event.__name__,
                     }
                 )
@@ -845,7 +845,7 @@ class EventManager(object):
             tagstore.delay_index_event_tags(
                 organization_id=project.organization_id,
                 project_id=project.id,
-                group_id=group.id,
+                group_id=group.id if group else None,
                 environment_id=environment.id,
                 event_id=event.id,
                 tags=event.tags,
@@ -888,7 +888,8 @@ class EventManager(object):
         if not raw:
             if not project.first_event:
                 project.update(first_event=date)
-                first_event_received.send_robust(project=project, group=group, sender=Project)
+                first_event_received.send_robust(
+                    project=project, group=group, event=event, sender=Project)
 
         eventstream.insert(
             group=group,
