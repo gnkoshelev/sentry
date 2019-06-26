@@ -1,26 +1,29 @@
 from __future__ import absolute_import, print_function
 
 from django.db import router
-from django.db.models.signals import post_syncdb
-
-from sentry.models import User
+from django.db.models.signals import post_migrate
 
 
-def create_first_user(created_models, verbosity, db, app=None, **kwargs):
+def create_first_user(app_config, using, interactive, **kwargs):
     # this is super confusing
-    if app and app.__name__ != 'sentry.models':
+    if app_config and app_config.name != 'sentry.models':
         return
 
-    if User not in created_models:
+    try:
+        # TODO: This might be wrong, since we don't know which models were
+        # actually created. Maybe we should query and see whether there  are no
+        # users instead?
+        User = app_config.get_model('sentry.User')
+    except LookupError:
         return
 
     if hasattr(router, 'allow_migrate'):
-        if not router.allow_migrate(db, User):
+        if not router.allow_migrate(using, User):
             return
     else:
-        if not router.allow_syncdb(db, User):
+        if not router.allow_syncdb(using, User):
             return
-    if not kwargs.get('interactive', True):
+    if not interactive:
         return
 
     import click
@@ -33,7 +36,7 @@ def create_first_user(created_models, verbosity, db, app=None, **kwargs):
     call_command('sentry.runner.commands.createuser.createuser', superuser=True)
 
 
-post_syncdb.connect(
+post_migrate.connect(
     create_first_user,
     dispatch_uid="create_first_user",
     weak=False,

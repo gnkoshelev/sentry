@@ -8,8 +8,7 @@ sentry.models.counter
 
 from __future__ import absolute_import
 
-from django.db import connection, connections
-from django.db.models.signals import post_syncdb
+from django.db import connection
 
 from sentry.db.models import (FlexibleForeignKey, Model, sane_repr, BoundedBigIntegerField)
 from sentry.utils.db import is_postgres
@@ -51,56 +50,3 @@ def increment_project_counter(project, delta=1):
             raise AssertionError("Not implemented database engine path")
     finally:
         cur.close()
-
-
-# this must be idempotent because it seems to execute twice
-# (at least during test runs)
-def create_counter_function(db, created_models, app=None, **kwargs):
-    if app and app.__name__ != 'sentry.models':
-        return
-
-    if not is_postgres(db):
-        return
-
-    if Counter not in created_models:
-        return
-
-    cursor = connections[db].cursor()
-    try:
-        cursor.execute(
-            '''
-            create or replace function sentry_increment_project_counter(
-                project bigint, delta int) returns int as $$
-            declare
-            new_val int;
-            begin
-            loop
-                update sentry_projectcounter set value = value + delta
-                where project_id = project
-                returning value into new_val;
-                if found then
-                return new_val;
-                end if;
-                begin
-                insert into sentry_projectcounter(project_id, value)
-                    values (project, delta)
-                    returning value into new_val;
-                return new_val;
-                exception when unique_violation then
-                end;
-            end loop;
-            end
-            $$ language plpgsql;
-        '''
-        )
-    finally:
-        cursor.close()
-
-
-# TODO(dcramer): Remove when Django 1.6 is no longer supported, as this does
-# nothing with Django migrations
-post_syncdb.connect(
-    create_counter_function,
-    dispatch_uid='create_counter_function',
-    weak=False,
-)
